@@ -220,13 +220,19 @@ const Dashboard = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString(undefined, {
+    const utcDate = new Date(dateString);
+    // Get local timezone offset in minutes
+    const offsetMinutes = utcDate.getTimezoneOffset();
+    // Convert UTC to local time by subtracting the offset
+    const localDate = new Date(utcDate.getTime() - (offsetMinutes * 60000));
+    
+    return localDate.toLocaleString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      hour12: false,
       timeZoneName: 'short'
     });
   };
@@ -396,8 +402,8 @@ const Dashboard = () => {
                 <TableCell sx={{ display: { xs: 'none', md: 'table-cell' }, maxWidth: { xs: 100, sm: 150 }, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {cert.serial_number || 'N/A'}
                 </TableCell>
-                <TableCell>{new Date(cert.valid_from).toLocaleDateString()}</TableCell>
-                <TableCell>{new Date(cert.valid_until).toLocaleDateString()}</TableCell>
+                <TableCell>{formatDate(cert.valid_from)}</TableCell>
+                <TableCell>{formatDate(cert.valid_until)}</TableCell>
                 <TableCell>
                   {cert.days_remaining !== null ? cert.days_remaining : 'N/A'}
                 </TableCell>
@@ -519,7 +525,7 @@ const Dashboard = () => {
                     Valid From
                   </Typography>
                   <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
-                    {new Date(selectedCert.valid_from).toLocaleString()}
+                    {formatDate(selectedCert.valid_from)}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -527,7 +533,7 @@ const Dashboard = () => {
                     Valid Until
                   </Typography>
                   <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
-                    {new Date(selectedCert.valid_until).toLocaleString()}
+                    {formatDate(selectedCert.valid_until)}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
