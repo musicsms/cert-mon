@@ -66,26 +66,42 @@ services:
   worker:
     build:
       context: ./services/worker
-      args:
-        - FLASK_ENV=production
+      dockerfile: Dockerfile
+    command: celery -A app worker --loglevel=info
     environment:
-      - FLASK_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - SSL_VERIFY=${SSL_VERIFY:-true}
-      - SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/ssl/certs/ca-certificates.crt}
-    command: ["celery", "-A", "app.celery", "worker", "--loglevel=${LOG_LEVEL:-info}", "--concurrency=2"]
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/certmon
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+      - redis
+      - db
+    restart: unless-stopped
     networks:
       - certmon-network
     deploy:
       replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  worker-beat:
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+    command: celery -A app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/certmon
+    depends_on:
+      - redis
+      - db
+      - worker
+    restart: unless-stopped
+    networks:
+      - certmon-network
+    deploy:
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s

@@ -34,18 +34,26 @@ services:
 
   worker:
     build: ./services/worker
+    command: celery -A app worker --loglevel=info
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/certmon
       - REDIS_URL=redis://redis:6379/0
-      - PYTHONPATH=/app
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    command: ["celery", "-A", "app.celery", "worker", "--loglevel=${LOG_LEVEL:-info}"]
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/certmon
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+      - redis
+      - db
+    networks:
+      - certmon-network
+
+  worker-beat:
+    build: ./services/worker
+    command: celery -A app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/certmon
+    depends_on:
+      - redis
+      - db
+      - worker
     networks:
       - certmon-network
 

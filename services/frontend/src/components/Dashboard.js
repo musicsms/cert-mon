@@ -1,59 +1,54 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Box,
   Button,
-  Card,
-  CardContent,
-  Chip,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   Grid,
-  IconButton,
   InputLabel,
-  Menu,
   MenuItem,
-  Modal,
-  Paper,
   Select,
-  Snackbar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
   TableHead,
+  TableBody,
   TableRow,
-  TextField,
+  TableCell,
+  Chip,
+  IconButton,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Typography,
+  Box,
+  Snackbar,
   Alert,
-  Divider
+  Link
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Info as InfoIcon,
-  MoreVert as MoreVertIcon,
-  Refresh as RefreshIcon,
-} from '@mui/icons-material';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useDropzone } from 'react-dropzone';
+import AddIcon from '@mui/icons-material/Add';
+import InfoIcon from '@mui/icons-material/Info';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
+
+// Import shared components
+import PageContainer from './shared/PageContainer';
+import ContentCard from './shared/ContentCard';
+import FilterContainer from './shared/FilterContainer';
+import ResponsiveTable from './shared/ResponsiveTable';
 
 const API_URL = '/api';
 
-function Dashboard() {
+const Dashboard = () => {
   const queryClient = useQueryClient();
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedCert, setSelectedCert] = useState(null);
   const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
   const [expiryFilter, setExpiryFilter] = useState('all');
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(16); // Default 16 hours
   const [filters, setFilters] = useState({
-    domain: '',
+    url: '', // Changed from domain to url to match table column
     commonName: '',
     issuer: '',
     serialNumber: '',
@@ -69,17 +64,10 @@ function Dashboard() {
     queryKey: ['certificates'],
     queryFn: async () => {
       try {
-        console.log('Fetching certificates from:', `${API_URL}/certificates`);
         const response = await axios.get(`${API_URL}/certificates`);
-        console.log('API Response:', response);
         return response.data;
       } catch (error) {
         console.error('API Error:', error);
-        console.error('Request URL:', `${API_URL}/certificates`);
-        if (error.response) {
-          console.error('Error Response:', error.response.data);
-          console.error('Error Status:', error.response.status);
-        }
         setAlert({
           open: true,
           message: error.response?.data?.error || 'Failed to fetch certificates. Please try again.',
@@ -88,11 +76,31 @@ function Dashboard() {
         throw error;
       }
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
-    retry: 3 // Retry failed requests 3 times
+    refetchInterval: 5 * 60 * 1000, // 5 minutes frontend refresh
+    retry: 3
   });
 
-  const certificateStats = useMemo(() => {
+  // Add a function to handle refresh interval change
+  const handleRefreshIntervalChange = async (event) => {
+    const newInterval = event.target.value;
+    setRefreshInterval(newInterval);
+    try {
+      await axios.post(`${API_URL}/settings/refresh-interval`, { interval: newInterval });
+      setAlert({
+        open: true,
+        message: 'Certificate check interval updated successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      setAlert({
+        open: true,
+        message: 'Failed to update certificate check interval',
+        severity: 'error'
+      });
+    }
+  };
+
+  const certificateStats = React.useMemo(() => {
     const now = new Date();
     return {
       total: certificates.length,
@@ -107,13 +115,13 @@ function Dashboard() {
     };
   }, [certificates]);
 
-  const filteredCertificates = useMemo(() => {
+  const filteredCertificates = React.useMemo(() => {
     let filtered = certificates;
     
     // Apply text filters
-    if (filters.domain) {
+    if (filters.url) {
       filtered = filtered.filter(cert => 
-        cert.url.toLowerCase().includes(filters.domain.toLowerCase())
+        cert.url.toLowerCase().includes(filters.url.toLowerCase())
       );
     }
     if (filters.commonName) {
@@ -185,45 +193,23 @@ function Dashboard() {
       await axios.post(`${API_URL}/certificates/${id}/refresh`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['certificates']);
       setAlert({
         open: true,
-        message: 'Certificate refresh triggered successfully',
+        message: 'Certificate check triggered successfully',
         severity: 'success'
       });
+      // Refetch after a short delay to get the updated status
+      setTimeout(() => {
+        queryClient.invalidateQueries(['certificates']);
+      }, 2000);
     },
     onError: (error) => {
       setAlert({
         open: true,
-        message: error.response?.data?.error || 'Failed to refresh certificate',
+        message: error.response?.data?.error || 'Error triggering certificate check',
         severity: 'error'
       });
     }
-  });
-
-  const { getRootProps, getInputProps } = useDropzone({
-    accept: {
-      'text/csv': ['.csv'],
-    },
-    onDrop: async (files) => {
-      const formData = new FormData();
-      formData.append('file', files[0]);
-      try {
-        await axios.post(`${API_URL}/certificates/import`, formData);
-        queryClient.invalidateQueries(['certificates']);
-        setAlert({
-          open: true,
-          message: 'Certificates imported successfully',
-          severity: 'success'
-        });
-      } catch (error) {
-        setAlert({
-          open: true,
-          message: error.response?.data?.error || 'Error importing certificates',
-          severity: 'error'
-        });
-      }
-    },
   });
 
   const getStatusColor = (status) => {
@@ -246,142 +232,151 @@ function Dashboard() {
   };
 
   const handleCertificateAction = (cert, action) => {
-    if (action === 'refresh') {
-      refreshCertMutation.mutate(cert.id);
-    } else if (action === 'delete') {
-      deleteCertMutation.mutate(cert.id);
-    } else if (action === 'info') {
-      setSelectedCert(cert);
-      setDetailModalOpen(true);
+    switch (action) {
+      case 'info':
+        setSelectedCert(cert);
+        setDetailModalOpen(true);
+        break;
+      case 'refresh':
+        refreshCertMutation.mutate(cert.id);
+        break;
+      case 'delete':
+        if (window.confirm('Are you sure you want to delete this certificate?')) {
+          deleteCertMutation.mutate(cert.id);
+        }
+        break;
+      default:
+        break;
     }
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" gutterBottom>
-          Certificate Status Overview
-        </Typography>
-      </Box>
+    <PageContainer>
+      <Container maxWidth="xl" sx={{ py: { xs: 2, sm: 4 }, flex: 1 }}>
+        {/* Stats Grid */}
+        <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ mb: { xs: 2, sm: 4 } }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <ContentCard title="Total" value={certificateStats.total} />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <ContentCard title="Valid" value={certificateStats.valid} color="success.dark" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <ContentCard title="Expiring Soon" value={certificateStats.expiring} color="warning.dark" />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <ContentCard title="Expired" value={certificateStats.expired} color="error.dark" />
+          </Grid>
+        </Grid>
 
-      {/* Stats Grid */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: 'primary.main', color: 'white', borderRadius: 2, boxShadow: 3 }}>
-            <CardContent>
-              <Typography variant="h6">Total</Typography>
-              <Typography variant="h4">{certificateStats.total}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: 'success.main', color: 'white', borderRadius: 2, boxShadow: 3 }}>
-            <CardContent>
-              <Typography variant="h6">Valid</Typography>
-              <Typography variant="h4">{certificateStats.valid}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: 'warning.main', color: 'white', borderRadius: 2, boxShadow: 3 }}>
-            <CardContent>
-              <Typography variant="h6">Expiring Soon</Typography>
-              <Typography variant="h4">{certificateStats.expiring}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: 'error.main', color: 'white', borderRadius: 2, boxShadow: 3 }}>
-            <CardContent>
-              <Typography variant="h6">Expired</Typography>
-              <Typography variant="h4">{certificateStats.expired}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+        {/* Filters */}
+        <FilterContainer title="Filters">
+          <Grid container spacing={{ xs: 1, sm: 2 }}>
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>URL</InputLabel>
+                <Select
+                  value={filters.url}
+                  label="URL"
+                  onChange={(e) => setFilters({ ...filters, url: e.target.value })}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {certificates.map((cert) => (
+                    <MenuItem key={cert.id} value={cert.url}>{cert.url}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Common Name</InputLabel>
+                <Select
+                  value={filters.commonName}
+                  label="Common Name"
+                  onChange={(e) => setFilters({ ...filters, commonName: e.target.value })}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {certificates.map((cert) => (
+                    <MenuItem key={cert.id} value={cert.subject}>{cert.subject}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Issuer</InputLabel>
+                <Select
+                  value={filters.issuer}
+                  label="Issuer"
+                  onChange={(e) => setFilters({ ...filters, issuer: e.target.value })}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {certificates.map((cert) => (
+                    <MenuItem key={cert.id} value={cert.issuer}>{cert.issuer}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Serial Number</InputLabel>
+                <Select
+                  value={filters.serialNumber}
+                  label="Serial Number"
+                  onChange={(e) => setFilters({ ...filters, serialNumber: e.target.value })}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {certificates.map((cert) => (
+                    <MenuItem key={cert.id} value={cert.serial_number}>{cert.serial_number}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={filters.status}
+                  label="Status"
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="valid">Valid</MenuItem>
+                  <MenuItem value="expired">Expired</MenuItem>
+                  <MenuItem value="error">Error</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Expiry</InputLabel>
+                <Select
+                  value={expiryFilter}
+                  label="Expiry"
+                  onChange={(e) => setExpiryFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="valid">Valid</MenuItem>
+                  <MenuItem value="expiring30">Expiring in 30 days</MenuItem>
+                  <MenuItem value="expired">Expired</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </FilterContainer>
 
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Filters
-        </Typography>
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={2}>
-            <TextField
-              fullWidth
-              label="Domain"
-              value={filters.domain}
-              onChange={(e) => setFilters({ ...filters, domain: e.target.value })}
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              fullWidth
-              label="Common Name"
-              value={filters.commonName}
-              onChange={(e) => setFilters({ ...filters, commonName: e.target.value })}
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              fullWidth
-              label="Issuer"
-              value={filters.issuer}
-              onChange={(e) => setFilters({ ...filters, issuer: e.target.value })}
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              fullWidth
-              label="Serial Number"
-              value={filters.serialNumber}
-              onChange={(e) => setFilters({ ...filters, serialNumber: e.target.value })}
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={filters.status}
-                label="Status"
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="valid">Valid</MenuItem>
-                <MenuItem value="expired">Expired</MenuItem>
-                <MenuItem value="error">Error</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <FormControl fullWidth>
-              <InputLabel>Expiry</InputLabel>
-              <Select
-                value={expiryFilter}
-                label="Expiry"
-                onChange={(e) => setExpiryFilter(e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="valid">Valid</MenuItem>
-                <MenuItem value="expiring30">Expiring in 30 days</MenuItem>
-                <MenuItem value="expired">Expired</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 3 }}>
-        <Table>
+        {/* Certificates Table */}
+        <ResponsiveTable>
           <TableHead>
             <TableRow sx={{ bgcolor: 'primary.main' }}>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>URL</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Common Name</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Issuer</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Serial Number</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', display: { xs: 'none', md: 'table-cell' } }}>Issuer</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', display: { xs: 'none', md: 'table-cell' } }}>Serial Number</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Valid From</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Valid Until</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Days Remaining</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Last Checked</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Days</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', display: { xs: 'none', sm: 'table-cell' } }}>Last Checked</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
             </TableRow>
@@ -389,19 +384,30 @@ function Dashboard() {
           <TableBody>
             {filteredCertificates.map((cert) => (
               <TableRow key={cert.id} hover>
-                <TableCell>{cert.url}</TableCell>
-                <TableCell>{cert.subject}</TableCell>
-                <TableCell>{cert.issuer}</TableCell>
-                <TableCell>{cert.serial_number || 'N/A'}</TableCell>
+                <TableCell sx={{ maxWidth: { xs: 150, sm: 200 }, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {cert.url}
+                </TableCell>
+                <TableCell sx={{ maxWidth: { xs: 150, sm: 200 }, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {cert.subject}
+                </TableCell>
+                <TableCell sx={{ display: { xs: 'none', md: 'table-cell' }, maxWidth: { xs: 150, sm: 200 }, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {cert.issuer}
+                </TableCell>
+                <TableCell sx={{ display: { xs: 'none', md: 'table-cell' }, maxWidth: { xs: 100, sm: 150 }, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {cert.serial_number || 'N/A'}
+                </TableCell>
                 <TableCell>{new Date(cert.valid_from).toLocaleDateString()}</TableCell>
                 <TableCell>{new Date(cert.valid_until).toLocaleDateString()}</TableCell>
                 <TableCell>
                   {cert.days_remaining !== null ? cert.days_remaining : 'N/A'}
                 </TableCell>
-                <TableCell>{formatDate(cert.last_checked)}</TableCell>
+                <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                  {formatDate(cert.last_checked)}
+                </TableCell>
                 <TableCell>
                   <Chip
                     label={cert.status}
+                    size="small"
                     color={
                       cert.status === 'valid'
                         ? 'success'
@@ -409,35 +415,36 @@ function Dashboard() {
                         ? 'error'
                         : 'warning'
                     }
+                    sx={{ fontSize: { xs: '0.7rem', sm: '0.8rem' }, height: { xs: 24, sm: 32 } }}
                   />
                 </TableCell>
                 <TableCell>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: { xs: 0.5, sm: 1 }, flexWrap: 'nowrap' }}>
                     <Tooltip title="View Details">
                       <IconButton
                         size="small"
                         onClick={() => handleCertificateAction(cert, 'info')}
-                        sx={{ color: 'primary.main' }}
+                        sx={{ color: 'primary.main', padding: { xs: 0.5, sm: 1 } }}
                       >
-                        <InfoIcon />
+                        <InfoIcon sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }} />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Refresh">
                       <IconButton
                         size="small"
                         onClick={() => handleCertificateAction(cert, 'refresh')}
-                        sx={{ color: 'success.main' }}
+                        sx={{ color: 'success.main', padding: { xs: 0.5, sm: 1 } }}
                       >
-                        <RefreshIcon />
+                        <RefreshIcon sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }} />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Delete">
                       <IconButton
                         size="small"
                         onClick={() => handleCertificateAction(cert, 'delete')}
-                        sx={{ color: 'error.main' }}
+                        sx={{ color: 'error.main', padding: { xs: 0.5, sm: 1 } }}
                       >
-                        <DeleteIcon />
+                        <DeleteIcon sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }} />
                       </IconButton>
                     </Tooltip>
                   </Box>
@@ -446,90 +453,143 @@ function Dashboard() {
             ))}
             {filteredCertificates.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
-                  <Typography variant="body1" color="text.secondary">
+                <TableCell colSpan={10} align="center" sx={{ py: { xs: 2, sm: 3 }, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                  <Typography variant="body1" color="text.secondary" sx={{ fontSize: 'inherit' }}>
                     No certificates found matching the filters
                   </Typography>
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </TableContainer>
+        </ResponsiveTable>
 
-      {/* Certificate Detail Modal */}
-      <Dialog 
-        open={detailModalOpen} 
-        onClose={() => setDetailModalOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Certificate Details</DialogTitle>
-        <DialogContent>
-          {selectedCert && (
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1">URL</Typography>
-                <Typography variant="body1">{selectedCert.url}</Typography>
+        {/* Certificate Detail Modal */}
+        <Dialog 
+          open={detailModalOpen} 
+          onClose={() => setDetailModalOpen(false)}
+          maxWidth="md"
+          fullWidth
+          sx={{
+            '& .MuiDialog-paper': {
+              width: { xs: '95%', sm: '80%', md: '70%' },
+              margin: { xs: 1, sm: 2 }
+            }
+          }}
+        >
+          <DialogTitle sx={{ fontSize: { xs: '1.2rem', sm: '1.5rem' }, py: { xs: 1.5, sm: 2 } }}>
+            Certificate Details
+          </DialogTitle>
+          <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+            {selectedCert && (
+              <Grid container spacing={{ xs: 1.5, sm: 2 }}>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+                    URL
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
+                    {selectedCert.url}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+                    Common Name
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
+                    {selectedCert.subject}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+                    Issuer
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
+                    {selectedCert.issuer}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+                    Serial Number
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
+                    {selectedCert.serial_number || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle1" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+                    Valid From
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
+                    {new Date(selectedCert.valid_from).toLocaleString()}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle1" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+                    Valid Until
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
+                    {new Date(selectedCert.valid_until).toLocaleString()}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle1" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+                    Days Remaining
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, wordBreak: 'break-all' }}>
+                    {selectedCert.days_remaining !== null ? `${selectedCert.days_remaining} days` : 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="subtitle1" sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+                    Status
+                  </Typography>
+                  <Chip
+                    label={selectedCert.status}
+                    size="small"
+                    color={
+                      selectedCert.status === 'valid'
+                        ? 'success'
+                        : selectedCert.status === 'expired'
+                        ? 'error'
+                        : 'warning'
+                    }
+                    sx={{ fontSize: { xs: '0.7rem', sm: '0.8rem' }, height: { xs: 24, sm: 32 } }}
+                  />
+                </Grid>
               </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1">Common Name</Typography>
-                <Typography variant="body1">{selectedCert.subject}</Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1">Issuer</Typography>
-                <Typography variant="body1">{selectedCert.issuer}</Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1">Serial Number</Typography>
-                <Typography variant="body1">{selectedCert.serial_number || 'N/A'}</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="subtitle1">Valid From</Typography>
-                <Typography variant="body1">{new Date(selectedCert.valid_from).toLocaleString()}</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="subtitle1">Valid Until</Typography>
-                <Typography variant="body1">{new Date(selectedCert.valid_until).toLocaleString()}</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="subtitle1">Days Remaining</Typography>
-                <Typography variant="body1">{selectedCert.days_remaining !== null ? `${selectedCert.days_remaining} days` : 'N/A'}</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="subtitle1">Status</Typography>
-                <Chip
-                  label={selectedCert.status}
-                  color={
-                    selectedCert.status === 'valid'
-                      ? 'success'
-                      : selectedCert.status === 'expired'
-                      ? 'error'
-                      : 'warning'
-                  }
-                />
-              </Grid>
-            </Grid>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDetailModalOpen(false)} color="primary">
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ p: { xs: 1.5, sm: 2 } }}>
+            <Button 
+              onClick={() => setDetailModalOpen(false)} 
+              color="primary"
+              sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-      <Snackbar
-        open={alert.open}
-        autoHideDuration={6000}
-        onClose={() => setAlert({ ...alert, open: false })}
-      >
-        <Alert severity={alert.severity} sx={{ width: '100%' }}>
-          {alert.message}
-        </Alert>
-      </Snackbar>
-    </Container>
+        <Snackbar
+          open={alert.open}
+          autoHideDuration={6000}
+          onClose={() => setAlert({ ...alert, open: false })}
+          sx={{
+            bottom: { xs: 16, sm: 24 }
+          }}
+        >
+          <Alert 
+            severity={alert.severity} 
+            sx={{ 
+              width: '100%',
+              fontSize: { xs: '0.875rem', sm: '1rem' }
+            }}
+          >
+            {alert.message}
+          </Alert>
+        </Snackbar>
+      </Container>
+    </PageContainer>
   );
-}
+};
 
 export default Dashboard;

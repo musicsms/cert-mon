@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
-import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Dashboard from './Dashboard';
 import AddDomain from './AddDomain';
@@ -32,35 +30,54 @@ function Layout() {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static" sx={{ mb: 2 }}>
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+      <Container maxWidth="xl">
+        <Box sx={{ 
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          py: 2,
+          mb: 2,
+          borderBottom: 1,
+          borderColor: 'divider'
+        }}>
+          <Typography 
+            variant="h6" 
+            component="div"
+            sx={{ 
+              fontSize: '1.25rem',
+              fontWeight: 500,
+              letterSpacing: '0.5px',
+              color: 'text.primary'
+            }}
+          >
             Certificate Monitor
           </Typography>
-        </Toolbar>
-        <Container maxWidth="xl">
           <Tabs 
             value={currentTab} 
             onChange={handleTabChange}
             sx={{ 
               '& .MuiTab-root': {
-                color: 'rgba(255, 255, 255, 0.7)',
+                color: 'text.secondary',
+                minHeight: '48px',
+                textTransform: 'none',
+                fontSize: '0.95rem',
+                fontWeight: 400,
+                px: 3,
                 '&.Mui-selected': {
-                  color: '#fff',
+                  color: 'primary.main',
+                  fontWeight: 500
                 }
               },
-            }}
-            TabIndicatorProps={{
-              style: {
-                backgroundColor: '#fff',
+              '& .MuiTabs-indicator': {
+                backgroundColor: 'primary.main'
               }
             }}
           >
-            <Tab label="Dashboard" sx={{ minWidth: 120 }} />
-            <Tab label="Add Domain" sx={{ minWidth: 120 }} />
+            <Tab label="Dashboard" />
+            <Tab label="Add Domain" />
           </Tabs>
-        </Container>
-      </AppBar>
+        </Box>
+      </Container>
 
       <Container maxWidth="xl">
         <TabPanel value={currentTab} index={0}>

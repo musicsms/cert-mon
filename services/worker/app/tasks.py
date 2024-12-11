@@ -82,37 +82,58 @@ def get_certificate_info(url):
             'status': f'error: {str(e)}'
         }
 
-@app.task(name='app.tasks.check_certificate', bind=True, max_retries=3)
-def check_certificate(self, cert_id):
+@app.task(name='app.tasks.check_certificate')
+def check_certificate(cert_id):
     """Check certificate information for a given certificate ID."""
     session = Session()
     try:
-        logger.info(f"Processing certificate ID: {cert_id}")
+        logger.info(f"Checking certificate for ID: {cert_id}")
         cert = session.query(Certificate).get(cert_id)
         if not cert:
-            logger.error(f"Certificate not found: {cert_id}")
-            return {'error': 'Certificate not found'}
+            logger.error(f"Certificate not found for ID: {cert_id}")
+            return
 
         cert_info = get_certificate_info(cert.url)
         
-        logger.info(f"Certificate info retrieved for {cert.url}: {cert_info}")
-        
+        # Update certificate information
         cert.issuer = cert_info['issuer']
         cert.subject = cert_info['subject']
         cert.serial_number = cert_info['serial_number']
         cert.valid_from = cert_info['valid_from']
         cert.valid_until = cert_info['valid_until']
-        cert.status = cert_info['status']
         cert.last_checked = datetime.utcnow()
+        cert.status = cert_info['status']
         cert.updated_at = datetime.utcnow()
         
         session.commit()
-        logger.info(f"Successfully updated certificate {cert_id} with serial number: {cert.serial_number}")
-        return {'success': True, 'cert_id': cert_id}
+        logger.info(f"Certificate updated for ID: {cert_id}")
     except Exception as e:
-        logger.error(f"Error processing certificate {cert_id}: {str(e)}")
+        logger.error(f"Error checking certificate {cert_id}: {str(e)}")
         session.rollback()
-        # Retry the task if it fails
-        raise self.retry(exc=e, countdown=60)  # Retry after 60 seconds
+        # Update status to error if something goes wrong
+        try:
+            cert = session.query(Certificate).get(cert_id)
+            if cert:
+                cert.status = 'error'
+                cert.last_checked = datetime.utcnow()
+                cert.updated_at = datetime.utcnow()
+                session.commit()
+        except:
+            session.rollback()
+    finally:
+        session.close()
+
+@app.task(name='app.tasks.check_all_certificates')
+def check_all_certificates():
+    """Check all certificates in the database."""
+    session = Session()
+    try:
+        certificates = session.query(Certificate).all()
+        for cert in certificates:
+            # Schedule individual certificate checks
+            check_certificate.delay(cert.id)
+        logger.info(f"Scheduled checks for {len(certificates)} certificates")
+    except Exception as e:
+        logger.error(f"Error scheduling certificate checks: {str(e)}")
     finally:
         session.close()

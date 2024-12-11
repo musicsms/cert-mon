@@ -161,3 +161,28 @@ def test_db():
             'status': 'error',
             'message': str(e)
         }), 500
+
+# Add new endpoint for updating refresh interval
+@api_bp.route('/settings/refresh-interval', methods=['POST'])
+def update_refresh_interval():
+    try:
+        data = request.get_json()
+        if not data or 'interval' not in data:
+            return jsonify({'error': 'Interval is required'}), 400
+
+        interval = int(data['interval'])
+        if interval not in [1, 4, 8, 12, 16, 24]:
+            return jsonify({'error': 'Invalid interval value'}), 400
+
+        # Update Celery beat schedule
+        app.conf.beat_schedule = {
+            'check-certificates-every-n-hours': {
+                'task': 'app.tasks.check_all_certificates',
+                'schedule': interval * 3600,  # Convert hours to seconds
+            },
+        }
+
+        return jsonify({'message': f'Check interval updated to {interval} hours'}), 200
+    except Exception as e:
+        logger.error(f"Error updating refresh interval: {str(e)}")
+        return jsonify({'error': str(e)}), 500

@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import FormControl from '@mui/material/FormControl';
-import Grid from '@mui/material/Grid';
-import InputLabel from '@mui/material/InputLabel';
-import MenuItem from '@mui/material/MenuItem';
-import Paper from '@mui/material/Paper';
-import Select from '@mui/material/Select';
-import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
-import Divider from '@mui/material/Divider';
-import Alert from '@mui/material/Alert';
-import Snackbar from '@mui/material/Snackbar';
+import {
+  Button,
+  FormControl,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+  Box,
+  Alert,
+  Snackbar,
+  Container
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useDropzone } from 'react-dropzone';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+
+// Import shared components
+import PageContainer from './shared/PageContainer';
 
 const API_URL = '/api';
 
@@ -104,18 +110,37 @@ function AddDomain() {
   };
 
   return (
-    <Box sx={{ p: 4 }}>
-      <Typography variant="h5" sx={{ mb: 4 }}>Add Domain to Monitor</Typography>
+    <PageContainer>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'flex-end',
+        mb: 3,
+        mx: 3
+      }}>
+        <Button
+          variant="contained"
+          color="error"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => window.location.href = '/'}
+          sx={{
+            textTransform: 'none',
+            borderRadius: 2,
+            px: 3
+          }}
+        >
+          Back to Dashboard
+        </Button>
+      </Box>
       
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Box component="form" onSubmit={handleAddDomain}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                Enter Domain Details
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={3}>
+      <Container maxWidth="xl" sx={{ py: { xs: 2, sm: 4 }, flex: 1 }}>
+        <Box sx={{ 
+          p: { xs: 2, sm: 3, md: 4 },
+          maxWidth: 'md',
+          mx: 'auto',
+          width: '100%'
+        }}>
+          <Grid container spacing={{ xs: 1, sm: 2 }} alignItems="center">
+            <Grid item xs={12} sm={3}>
               <FormControl fullWidth>
                 <InputLabel>Protocol</InputLabel>
                 <Select
@@ -128,77 +153,99 @@ function AddDomain() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Domain"
+                placeholder="example.com"
                 value={newDomain.domain}
                 onChange={(e) => setNewDomain({ ...newDomain, domain: e.target.value })}
                 required
-                placeholder="example.com"
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} sm={3}>
               <TextField
                 fullWidth
                 label="Port"
+                placeholder="443"
                 value={newDomain.port}
                 onChange={(e) => setNewDomain({ ...newDomain, port: e.target.value })}
-                placeholder="443"
               />
             </Grid>
             <Grid item xs={12}>
-              <Button 
-                variant="contained" 
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                fullWidth
+                sx={{ 
+                  mt: { xs: 1, sm: 2 },
+                  height: { xs: 40, sm: 48 }
+                }}
                 onClick={handleAddDomain}
-                disabled={!newDomain.domain}
-                sx={{ mt: 2 }}
               >
                 Add Domain
               </Button>
             </Grid>
           </Grid>
         </Box>
-      </Paper>
 
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="subtitle1" sx={{ mb: 3 }}>
-          Import Domains from CSV
-        </Typography>
         <Box
           {...getRootProps()}
           sx={{
             border: '2px dashed',
             borderColor: 'primary.main',
-            borderRadius: 1,
-            p: 4,
+            borderRadius: 2,
+            p: { xs: 2, sm: 3 },
             textAlign: 'center',
             cursor: 'pointer',
+            transition: 'all 0.2s',
             '&:hover': {
-              bgcolor: 'action.hover'
+              borderColor: 'primary.dark',
+              bgcolor: 'action.hover',
             }
           }}
         >
           <input {...getInputProps()} />
-          <Typography variant="body1" sx={{ mb: 1 }}>
+          <UploadFileIcon sx={{ 
+            fontSize: { xs: '2rem', sm: '3rem' },
+            color: 'primary.main',
+            mb: 1
+          }} />
+          <Typography variant="body1" sx={{ 
+            fontSize: { xs: '0.875rem', sm: '1rem' },
+            color: 'text.secondary'
+          }}>
             Drag and drop a CSV file here, or click to select
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            CSV format: protocol,domain,port (e.g., https,example.com,443)
+          <Typography variant="caption" sx={{ 
+            display: 'block',
+            mt: 1,
+            color: 'text.secondary',
+            fontSize: { xs: '0.75rem', sm: '0.875rem' }
+          }}>
+            CSV format: domain,port (optional)
           </Typography>
         </Box>
-      </Paper>
 
-      <Snackbar
-        open={alert.open}
-        autoHideDuration={6000}
-        onClose={() => setAlert({ ...alert, open: false })}
-      >
-        <Alert severity={alert.severity} sx={{ width: '100%' }}>
-          {alert.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+        <Snackbar
+          open={alert.open}
+          autoHideDuration={6000}
+          onClose={() => setAlert({ ...alert, open: false })}
+          sx={{ bottom: { xs: 16, sm: 24 } }}
+        >
+          <Alert 
+            severity={alert.severity}
+            sx={{ 
+              width: '100%',
+              fontSize: { xs: '0.875rem', sm: '1rem' }
+            }}
+          >
+            {alert.message}
+          </Alert>
+        </Snackbar>
+      </Container>
+    </PageContainer>
   );
 }
 
