@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -43,7 +43,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+const API_URL = '/api';
 
 function Dashboard() {
   const queryClient = useQueryClient();
@@ -60,9 +60,36 @@ function Dashboard() {
     status: 'all'
   });
 
-  const { data: certificates = [], isLoading } = useQuery('certificates', async () => {
-    const { data } = await axios.get(`${API_URL}/certificates`);
-    return data;
+  // Configure axios defaults
+  React.useEffect(() => {
+    axios.defaults.baseURL = window.location.origin;
+  }, []);
+
+  const { data: certificates = [], isLoading, error } = useQuery({
+    queryKey: ['certificates'],
+    queryFn: async () => {
+      try {
+        console.log('Fetching certificates from:', `${API_URL}/certificates`);
+        const response = await axios.get(`${API_URL}/certificates`);
+        console.log('API Response:', response);
+        return response.data;
+      } catch (error) {
+        console.error('API Error:', error);
+        console.error('Request URL:', `${API_URL}/certificates`);
+        if (error.response) {
+          console.error('Error Response:', error.response.data);
+          console.error('Error Status:', error.response.status);
+        }
+        setAlert({
+          open: true,
+          message: error.response?.data?.error || 'Failed to fetch certificates. Please try again.',
+          severity: 'error'
+        });
+        throw error;
+      }
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+    retry: 3 // Retry failed requests 3 times
   });
 
   const certificateStats = useMemo(() => {
@@ -132,29 +159,47 @@ function Dashboard() {
     return filtered;
   }, [certificates, filters, expiryFilter]);
 
-  const deleteCertMutation = useMutation(
-    async (id) => {
+  const deleteCertMutation = useMutation({
+    mutationFn: async (id) => {
       await axios.delete(`${API_URL}/certificates/${id}`);
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('certificates');
-        setAlert({ open: true, message: 'Certificate deleted successfully', severity: 'success' });
-      },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['certificates']);
+      setAlert({
+        open: true,
+        message: 'Certificate deleted successfully',
+        severity: 'success'
+      });
+    },
+    onError: (error) => {
+      setAlert({
+        open: true,
+        message: error.response?.data?.error || 'Failed to delete certificate',
+        severity: 'error'
+      });
     }
-  );
+  });
 
-  const refreshCertMutation = useMutation(
-    async (id) => {
+  const refreshCertMutation = useMutation({
+    mutationFn: async (id) => {
       await axios.post(`${API_URL}/certificates/${id}/refresh`);
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('certificates');
-        setAlert({ open: true, message: 'Certificate refresh scheduled', severity: 'success' });
-      },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['certificates']);
+      setAlert({
+        open: true,
+        message: 'Certificate refresh triggered successfully',
+        severity: 'success'
+      });
+    },
+    onError: (error) => {
+      setAlert({
+        open: true,
+        message: error.response?.data?.error || 'Failed to refresh certificate',
+        severity: 'error'
+      });
     }
-  );
+  });
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -165,10 +210,18 @@ function Dashboard() {
       formData.append('file', files[0]);
       try {
         await axios.post(`${API_URL}/certificates/import`, formData);
-        queryClient.invalidateQueries('certificates');
-        setAlert({ open: true, message: 'Certificates imported successfully', severity: 'success' });
+        queryClient.invalidateQueries(['certificates']);
+        setAlert({
+          open: true,
+          message: 'Certificates imported successfully',
+          severity: 'success'
+        });
       } catch (error) {
-        setAlert({ open: true, message: error.response?.data?.error || 'Error importing certificates', severity: 'error' });
+        setAlert({
+          open: true,
+          message: error.response?.data?.error || 'Error importing certificates',
+          severity: 'error'
+        });
       }
     },
   });

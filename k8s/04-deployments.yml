@@ -56,7 +56,7 @@ spec:
           image: certmon-api:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 5000
+            - containerPort: 5001
           envFrom:
             - secretRef:
                 name: certmon-secrets
@@ -70,7 +70,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 5000
+              port: 5001
             initialDelaySeconds: 30
             periodSeconds: 10
 ---

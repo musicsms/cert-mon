@@ -27,7 +27,7 @@ def create_app():
 
     # Register blueprints
     from .api import api_bp
-    app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(api_bp)  # Remove url_prefix to match nginx config
 
     # Add prometheus metrics endpoint
     app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {

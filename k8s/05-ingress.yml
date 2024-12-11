@@ -32,4 +32,4 @@ spec:
               service:
                 name: certmon-api
                 port:
-                  number: 5000
+                  number: 5001

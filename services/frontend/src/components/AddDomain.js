@@ -16,7 +16,7 @@ import { useDropzone } from 'react-dropzone';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+const API_URL = '/api';
 
 function AddDomain() {
   const queryClient = useQueryClient();
@@ -27,37 +27,71 @@ function AddDomain() {
   });
   const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
 
-  const addDomainMutation = useMutation(
-    async (domainData) => {
-      const url = `${domainData.protocol}://${domainData.domain}:${domainData.port}`;
-      const { data } = await axios.post(`${API_URL}/certificates`, { url });
-      return data;
+  // Configure axios defaults
+  React.useEffect(() => {
+    axios.defaults.baseURL = window.location.origin;
+  }, []);
+
+  const addDomainMutation = useMutation({
+    mutationFn: async (domainData) => {
+      try {
+        const url = `${domainData.protocol}://${domainData.domain}${domainData.port !== '443' && domainData.port !== '80' ? `:${domainData.port}` : ''}`;
+        console.log('Adding domain:', url);
+        const response = await axios.post(`${API_URL}/certificates`, { url });
+        return response.data;
+      } catch (error) {
+        console.error('Error adding domain:', error);
+        if (error.response) {
+          console.error('Error Response:', error.response.data);
+          console.error('Error Status:', error.response.status);
+        }
+        throw error;
+      }
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('certificates');
-        setNewDomain({ protocol: 'https', domain: '', port: '443' });
-        setAlert({ open: true, message: 'Domain added successfully for monitoring', severity: 'success' });
-      },
-      onError: (error) => {
-        setAlert({ open: true, message: error.response?.data?.error || 'Error adding domain', severity: 'error' });
-      },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['certificates']);
+      setNewDomain({ protocol: 'https', domain: '', port: '443' });
+      setAlert({ 
+        open: true, 
+        message: 'Domain added successfully for monitoring', 
+        severity: 'success' 
+      });
+    },
+    onError: (error) => {
+      setAlert({ 
+        open: true, 
+        message: error.response?.data?.error || 'Error adding domain', 
+        severity: 'error' 
+      });
     }
-  );
+  });
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
       'text/csv': ['.csv'],
     },
     onDrop: async (files) => {
-      const formData = new FormData();
-      formData.append('file', files[0]);
       try {
+        const formData = new FormData();
+        formData.append('file', files[0]);
+        console.log('Importing domains from CSV');
         await axios.post(`${API_URL}/certificates/import`, formData);
-        queryClient.invalidateQueries('certificates');
-        setAlert({ open: true, message: 'Domains imported successfully', severity: 'success' });
+        queryClient.invalidateQueries(['certificates']);
+        setAlert({ 
+          open: true, 
+          message: 'Domains imported successfully', 
+          severity: 'success' 
+        });
       } catch (error) {
-        setAlert({ open: true, message: error.response?.data?.error || 'Error importing domains', severity: 'error' });
+        console.error('Error importing domains:', error);
+        if (error.response) {
+          console.error('Error Response:', error.response.data);
+        }
+        setAlert({ 
+          open: true, 
+          message: error.response?.data?.error || 'Error importing domains', 
+          severity: 'error' 
+        });
       }
     },
   });
