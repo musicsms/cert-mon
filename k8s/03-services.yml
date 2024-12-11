@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: certmon-frontend
+  namespace: certmon
+spec:
+  selector:
+    app: certmon-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: certmon-api
+  namespace: certmon
+spec:
+  selector:
+    app: certmon-api
+  ports:
+    - port: 5000
+      targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: certmon-db
+  namespace: certmon
+spec:
+  selector:
+    app: certmon-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: certmon-redis
+  namespace: certmon
+spec:
+  selector:
+    app: certmon-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+  type: ClusterIP

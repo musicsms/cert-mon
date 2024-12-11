@@ -1,0 +1,189 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: certmon-frontend
+  namespace: certmon
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: certmon-frontend
+  template:
+    metadata:
+      labels:
+        app: certmon-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: certmon-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          envFrom:
+            - secretRef:
+                name: certmon-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: certmon-api
+  namespace: certmon
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: certmon-api
+  template:
+    metadata:
+      labels:
+        app: certmon-api
+    spec:
+      containers:
+        - name: api
+          image: certmon-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: certmon-secrets
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: certmon-worker
+  namespace: certmon
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: certmon-worker
+  template:
+    metadata:
+      labels:
+        app: certmon-worker
+    spec:
+      containers:
+        - name: worker
+          image: certmon-worker:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: certmon-secrets
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: certmon-db
+  namespace: certmon
+spec:
+  serviceName: certmon-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: certmon-db
+  template:
+    metadata:
+      labels:
+        app: certmon-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: certmon-secrets
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: certmon-redis
+  namespace: certmon
+spec:
+  serviceName: certmon-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: certmon-redis
+  template:
+    metadata:
+      labels:
+        app: certmon-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          command: ["redis-server", "--appendonly", "yes"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "200m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
