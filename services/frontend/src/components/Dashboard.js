@@ -381,6 +381,7 @@ function Dashboard() {
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Valid From</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Valid Until</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Days Remaining</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Last Checked</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
             </TableRow>
@@ -397,6 +398,7 @@ function Dashboard() {
                 <TableCell>
                   {cert.days_remaining !== null ? cert.days_remaining : 'N/A'}
                 </TableCell>
+                <TableCell>{formatDate(cert.last_checked)}</TableCell>
                 <TableCell>
                   <Chip
                     label={cert.status}
@@ -444,7 +446,7 @@ function Dashboard() {
             ))}
             {filteredCertificates.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
                   <Typography variant="body1" color="text.secondary">
                     No certificates found matching the filters
                   </Typography>
