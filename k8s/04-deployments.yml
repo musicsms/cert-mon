@@ -77,22 +77,88 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: certmon-worker
+  name: certmon-worker-high-priority
   namespace: certmon
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: certmon-worker
+      app: certmon-worker-high-priority
   template:
     metadata:
       labels:
-        app: certmon-worker
+        app: certmon-worker-high-priority
     spec:
       containers:
         - name: worker
           image: certmon-worker:latest
           imagePullPolicy: Always
+          command: ["celery"]
+          args: ["-A", "app.celery", "worker", "--loglevel=info", "--concurrency=4", "-Q", "high_priority", "-n", "worker_high@%h"]
+          envFrom:
+            - secretRef:
+                name: certmon-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: certmon-worker-default
+  namespace: certmon
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: certmon-worker-default
+  template:
+    metadata:
+      labels:
+        app: certmon-worker-default
+    spec:
+      containers:
+        - name: worker
+          image: certmon-worker:latest
+          imagePullPolicy: Always
+          command: ["celery"]
+          args: ["-A", "app.celery", "worker", "--loglevel=info", "--concurrency=4", "-Q", "default", "-n", "worker_default@%h"]
+          envFrom:
+            - secretRef:
+                name: certmon-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: certmon-worker-low-priority
+  namespace: certmon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: certmon-worker-low-priority
+  template:
+    metadata:
+      labels:
+        app: certmon-worker-low-priority
+    spec:
+      containers:
+        - name: worker
+          image: certmon-worker:latest
+          imagePullPolicy: Always
+          command: ["celery"]
+          args: ["-A", "app.celery", "worker", "--loglevel=info", "--concurrency=2", "-Q", "low_priority", "-n", "worker_low@%h"]
           envFrom:
             - secretRef:
                 name: certmon-secrets
@@ -103,6 +169,38 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: certmon-worker-beat
+  namespace: certmon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: certmon-worker-beat
+  template:
+    metadata:
+      labels:
+        app: certmon-worker-beat
+    spec:
+      containers:
+        - name: worker-beat
+          image: certmon-worker:latest
+          imagePullPolicy: Always
+          command: ["celery"]
+          args: ["-A", "app.celery", "beat", "--loglevel=info"]
+          envFrom:
+            - secretRef:
+                name: certmon-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
 ---
 apiVersion: apps/v1
 kind: StatefulSet
