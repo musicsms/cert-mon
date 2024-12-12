@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-mon
+  labels:
+    name: cert-mon
+    environment: production
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-mon-db
+  labels:
+    name: cert-mon-db
+    environment: production
